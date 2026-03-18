@@ -1,6 +1,7 @@
 import os
 import json
 
+from lcb_runner.benchmarks.code_generation import CodeGenerationProblem
 from lcb_runner.runner.parser import get_args
 from lcb_runner.utils.scenarios import Scenario
 from lcb_runner.utils.path_utils import get_output_path
@@ -11,11 +12,29 @@ from lcb_runner.runner.scenario_router import (
     get_metrics,
 )
 
+def load_dataset_from_local_files():
+    dataset = []
+    data_dir = "/data0/xjh/LiveCodeBench/data"
+    for i in range(1, 7):
+        if i == 1:
+            file_name = "test.jsonl"
+        else:
+            file_name = f"test{i}.jsonl"
+        
+        with open(os.path.join(data_dir, file_name), "r") as f:
+            for line in f.readlines():
+                dataset.append(json.loads(line.strip()))
+    
+    dataset = [CodeGenerationProblem(**p) for p in dataset]
+    dataset = sorted(dataset, key=lambda x: x.question_id)
+    return dataset
+
 
 def main():
     args = get_args()
 
-    benchmark, _ = build_prompt_benchmark(args)
+    # benchmark, _ = build_prompt_benchmark(args)
+    benchmark = load_dataset_from_local_files()
 
     with open(args.custom_output_file, "r") as f:
         custom_outputs = json.load(f)
