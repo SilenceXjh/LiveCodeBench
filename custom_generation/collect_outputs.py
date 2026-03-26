@@ -2,8 +2,8 @@ import os
 import json
 from utils import get_data
 
-code_dir = "/data0/xjh/LiveCodeBench/custom_generation/qwen1.5b_generations"
-output_file_path = "/data0/xjh/LiveCodeBench/custom_generation/qwen1.5b_outputs.json"
+code_dir = "/data0/xjh/LiveCodeBench/custom_generation/ds_test_first_generations"
+output_file_path = "/data0/xjh/LiveCodeBench/eval_results_dir/ds_test_first.json"
 
 data = get_data()
 

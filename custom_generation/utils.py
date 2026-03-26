@@ -1,9 +1,17 @@
 import json
+import os
+import sys
 from typing import Dict, List
 
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from openai import OpenAI
+
+current_file = os.path.abspath(__file__)
+current_dir = os.path.dirname(current_file)
+project_root = os.path.dirname(current_dir)
+sys.path.append(project_root)
+from lcb_runner.benchmarks.code_generation import CodeGenerationProblem
 
 
 def load_jsonl_data(file_path: str) -> List[Dict]:
@@ -30,7 +38,7 @@ def load_tokenizer_model(model_path: str):
     return tokenizer, model
 
 
-def model_generate(prompt: str, model, tokenizer, is_instruct=True, max_new_tokens=1024):
+def model_generate(prompt: str, model, tokenizer, is_instruct=True, max_new_tokens=4096):
     if is_instruct:
         messages = [
             {"role": "system", "content": "You are an expert Python programmer."},
@@ -81,7 +89,7 @@ def model_generate(prompt: str, model, tokenizer, is_instruct=True, max_new_toke
         return generated_text
     
 
-def ds_api_generate(prompt: str, client: OpenAI, max_new_tokens=1024):
+def ds_api_generate(prompt: str, client: OpenAI, max_new_tokens=4096):
     response = client.chat.completions.create(
         model="deepseek-chat",
         messages=[
@@ -108,9 +116,38 @@ def extract_python_code(generated_text: str) -> str:
     
     return code
 
+def extract_json_code(generated_text: str) -> str:
+    """从生成的文本中提取函数代码"""
+    if "```json" in generated_text:
+        code = generated_text.split("```json")[1].split("```")[0].strip()
+    elif "```" in generated_text:
+        code = generated_text.split("```")[1].split("```")[0].strip()
+    else:
+        code = generated_text.strip()
+    
+    return code
+
 
 def get_data(data_path: str = "/data0/xjh/LiveCodeBench/data/total.json"):
     with open(data_path, "r") as f:
         data = json.load(f)
 
     return data
+
+
+def load_dataset_from_local_files():
+    dataset = []
+    data_dir = "/data0/xjh/LiveCodeBench/data"
+    for i in range(1, 7):
+        if i == 1:
+            file_name = "test.jsonl"
+        else:
+            file_name = f"test{i}.jsonl"
+        
+        with open(os.path.join(data_dir, file_name), "r") as f:
+            for line in f.readlines():
+                dataset.append(json.loads(line.strip()))
+    
+    dataset = [CodeGenerationProblem(**p) for p in dataset]
+    dataset = sorted(dataset, key=lambda x: x.question_id)
+    return dataset

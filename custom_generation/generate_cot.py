@@ -1,7 +1,9 @@
 import os
 import sys
 import json
-from utils import load_tokenizer_model, model_generate, extract_python_code
+
+from openai import OpenAI
+from utils import load_tokenizer_model, model_generate, extract_python_code, ds_api_generate
 
 FORMATTING_MESSAGE_WITH_STARTER_CODE = "You will use the following starter code to write the solution to the problem and enclose your code within delimiters."
 
@@ -28,20 +30,28 @@ Then output the final code in the following format:
 
 
 data_path = "/data0/xjh/LiveCodeBench/data/total.json"
-model_path = "/data1/model/qwen/Qwen/Qwen2.5-Coder-1.5B-Instruct/"
-output_path = "/data0/xjh/LiveCodeBench/custom_generation/qwen1.5b_cot_generations"
+model_path = "/data1/model/qwen/Qwen/Qwen2.5-Coder-7B-Instruct/"
+output_path = "/data0/xjh/LiveCodeBench/custom_generation/ds_cot_generations"
+
+USE_DS_API = True
 
 os.makedirs(output_path, exist_ok=True)
 
 with open(data_path, "r") as f:
     data = json.load(f)
 
-tokenizer, model = load_tokenizer_model(model_path)
+if USE_DS_API:
+    client = OpenAI(api_key=os.environ.get('DEEPSEEK_API_KEY'), base_url="https://api.deepseek.com")
+else:
+    tokenizer, model = load_tokenizer_model(model_path)
 
 for sample in data:
     question_id = sample["question_id"]
     prompt = get_generic_question_template_answer(sample)
-    generated_text = model_generate(prompt, model, tokenizer)
+    if USE_DS_API:
+        generated_text = ds_api_generate(prompt, client)
+    else:
+        generated_text = model_generate(prompt, model, tokenizer)
     # print(generated_text)
     code = extract_python_code(generated_text)
     with open(os.path.join(output_path, f"{question_id}.py"), "w") as f:

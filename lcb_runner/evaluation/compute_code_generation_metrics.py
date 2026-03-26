@@ -48,6 +48,7 @@ def check_correctness(sample, generation, timeout, debug=True):
         in_outs = json.loads(sample["input_output"])
         # consider that all tests failed
         result = [[-1 for i in range(len(in_outs["inputs"]))]]
+        metadata_list = [{"errors": ["timeout!"]}]
         if debug:
             print(f"global timeout")
     return result[0], metadata_list[0]

@@ -235,12 +235,12 @@ def grade_call_based(
     compiled_sol = compile_code(code, timeout)
 
     if compiled_sol is None:
-        return
+        return [-4], {"errors": "Class Solution not found!"}
 
     method = get_function(compiled_sol, fn_name)
 
     if method is None:
-        return
+        return [-4], {"errors": f"function {fn_name} not found"}
 
     all_inputs = [
         [json.loads(line) for line in inputs.split("\n")] for inputs in all_inputs
@@ -250,6 +250,8 @@ def grade_call_based(
 
     total_execution = 0
     all_results = []
+    all_errors = []
+
     for idx, (gt_inp, gt_out) in enumerate(zip(all_inputs, all_outputs)):
         signal.alarm(timeout)
         faulthandler.enable()
@@ -272,39 +274,63 @@ def grade_call_based(
             all_results.append(tmp_result)
 
             if not tmp_result:
-                return all_results, {
-                    "output": truncatefn(prediction),
+                # return all_results, {
+                #     "output": truncatefn(prediction),
+                #     "inputs": truncatefn(gt_inp),
+                #     "expected": truncatefn(gt_out),
+                #     "error_code": -2,
+                #     "error_message": "Wrong Answer",
+                # }
+                all_errors.append({
+                    "index": idx,
                     "inputs": truncatefn(gt_inp),
+                    "output": truncatefn(prediction),
                     "expected": truncatefn(gt_out),
                     "error_code": -2,
                     "error_message": "Wrong Answer",
-                }
+                })
         except Exception as e:
             signal.alarm(0)
             if "timeoutexception" in repr(e).lower():
                 all_results.append(-3)
-                return all_results, {
+                # return all_results, {
+                #     "error": repr(e),
+                #     "error_code": -3,
+                #     "error_message": "Time Limit Exceeded",
+                #     "inputs": truncatefn(gt_inp),
+                #     "expected": truncatefn(gt_out),
+                # }
+                all_errors.append({
+                    "index": idx,
                     "error": repr(e),
                     "error_code": -3,
                     "error_message": "Time Limit Exceeded",
                     "inputs": truncatefn(gt_inp),
                     "expected": truncatefn(gt_out),
-                }
+                })
             else:
                 all_results.append(-4)
-                return all_results, {
+                # return all_results, {
+                #     "error": repr(e),
+                #     "error_code": -4,
+                #     "error_message": "Runtime Error",
+                #     "inputs": truncatefn(gt_inp),
+                #     "expected": truncatefn(gt_out),
+                # }
+                all_errors.append({
+                    "index": idx,
                     "error": repr(e),
                     "error_code": -4,
                     "error_message": "Runtime Error",
                     "inputs": truncatefn(gt_inp),
                     "expected": truncatefn(gt_out),
-                }
+                })
 
         finally:
             signal.alarm(0)
             faulthandler.disable()
 
-    return all_results, {"execution time": total_execution}
+    return all_results, {"execution time": total_execution, "errors": all_errors}
 
 
 def grade_stdio(
@@ -329,6 +355,7 @@ def grade_stdio(
         return
 
     all_results = []
+    all_errors = []  # 收集所有错误信息
     total_execution_time = 0
     for idx, (gt_inp, gt_out) in enumerate(zip(all_inputs, all_outputs)):
         signal.alarm(timeout)
@@ -346,22 +373,39 @@ def grade_stdio(
                 signal.alarm(0)
                 if "timeoutexception" in repr(e).lower():
                     all_results.append(-3)
-                    return all_results, {
+                    # return all_results, {
+                    #     "error": repr(e),
+                    #     "error_code": -3,
+                    #     "error_message": "Time Limit Exceeded",
+                    #     "inputs": truncatefn(gt_inp),
+                    #     "expected": truncatefn(gt_out),
+                    # }
+                    all_errors.append({
+                        "index": idx,
                         "error": repr(e),
                         "error_code": -3,
                         "error_message": "Time Limit Exceeded",
                         "inputs": truncatefn(gt_inp),
                         "expected": truncatefn(gt_out),
-                    }
+                    })
                 else:
                     all_results.append(-4)
-                    return all_results, {
+                    # return all_results, {
+                    #     "error": repr(e),
+                    #     "error_code": -4,
+                    #     "error_message": "Runtime Error",
+                    #     "inputs": truncatefn(gt_inp),
+                    #     "expected": truncatefn(gt_out),
+                    # }
+                    all_errors.append({
+                        "index": idx,
                         "error": repr(e),
                         "error_code": -4,
                         "error_message": "Runtime Error",
                         "inputs": truncatefn(gt_inp),
                         "expected": truncatefn(gt_out),
-                    }
+                    })
+                continue
 
             finally:
                 signal.alarm(0)
@@ -375,8 +419,8 @@ def grade_stdio(
         ## WA happens in multiple circumstances
         ## so cache the return to make it clean!
         WA_send_args = {
-            "output": truncatefn(prediction),
             "inputs": truncatefn(gt_inp),
+            "output": truncatefn(prediction),
             "expected": truncatefn(gt_out),
             "error_code": -2,
         }
@@ -384,8 +428,11 @@ def grade_stdio(
         if len(stripped_prediction_lines) != len(stripped_gt_out_lines):
             all_results.append(-2)
             WA_send_args["error_message"] = "Wrong answer: mismatched output length"
-            return all_results, WA_send_args
+            # return all_results, WA_send_args
+            all_errors.append(WA_send_args)
+            continue  # 不再 return
 
+        is_wa = False
         for output_line_idx, (
             stripped_prediction_line,
             stripped_gt_out_line,
@@ -408,21 +455,36 @@ def grade_stdio(
                 stripped_prediction_line
             )
             if not success:
-                all_results.append(-2)
-                return all_results, WA_send_args
+                # all_results.append(-2)
+                # return all_results, WA_send_args
+                is_wa = True
+                break
             success, decimal_gtout_line = convert_line_to_decimals(stripped_gt_out_line)
             if not success:
-                all_results.append(-2)
-                return all_results, WA_send_args
+                # all_results.append(-2)
+                # return all_results, WA_send_args
+                is_wa = True
+                break
 
             if decimal_prediction_line == decimal_gtout_line:
                 continue
 
+            # all_results.append(-2)
+            # return all_results, WA_send_args
+            is_wa = True
+            break
+        # all_results.append(True)
+        if is_wa:
             all_results.append(-2)
-            return all_results, WA_send_args
-        all_results.append(True)
+            WA_send_args["error_message"] = (
+                f"Wrong answer at {output_line_idx=}: "
+                f"{truncatefn(stripped_prediction_line)} != {truncatefn(stripped_gt_out_line)}"
+            )
+            all_errors.append(WA_send_args)
+        else:
+            all_results.append(True)
 
-    return all_results, {"execution time": total_execution_time}
+    return all_results, {"execution time": total_execution_time, "errors": all_errors}
 
 
 def run_test(sample, test=None, debug=False, timeout=6):
@@ -436,8 +498,8 @@ def run_test(sample, test=None, debug=False, timeout=6):
     # max memory is set to 4GB
     reliability_guard()
 
-    if debug:
-        print(f"start = {datetime.now().time()}")
+    # if debug:
+    #     print(f"start = {datetime.now().time()}")
 
     try:
         in_outs = json.loads(sample["input_output"])
@@ -454,8 +516,8 @@ def run_test(sample, test=None, debug=False, timeout=6):
             which_type = CODE_TYPE.call_based  # Call-based
             method_name = in_outs["fn_name"]
 
-    if debug:
-        print(f"loaded input_output = {datetime.now().time()}")
+    # if debug:
+    #     print(f"loaded input_output = {datetime.now().time()}")
 
     if test is None:
         assert False, "should not happen: test code is none"
@@ -463,8 +525,8 @@ def run_test(sample, test=None, debug=False, timeout=6):
     elif test is not None:
         results = []
         sol = import_string
-        if debug:
-            print(f"loading test code = {datetime.now().time()}")
+        # if debug:
+        #     print(f"loading test code = {datetime.now().time()}")
 
         if which_type == CODE_TYPE.call_based:
             signal.alarm(timeout)
@@ -479,8 +541,10 @@ def run_test(sample, test=None, debug=False, timeout=6):
                 return results, metadata
             except Exception as e:
                 return [-4], {
-                    "error_code": -4,
-                    "error_message": f"Error during testing: {e}",
+                    "errors": [{
+                        "error_code": -4,
+                        "error_message": f"Error during testing: {e}",
+                    }]
                 }
             finally:
                 signal.alarm(0)
@@ -499,8 +563,10 @@ def run_test(sample, test=None, debug=False, timeout=6):
                 return results, metadata
             except Exception as e:
                 return [-4], {
-                    "error_code": -4,
-                    "error_message": f"Error during testing: {e}",
+                    "errors": [{
+                        "error_code": -4,
+                        "error_message": f"Error during testing: {e}",
+                    }]
                 }
             finally:
                 signal.alarm(0)
